@@ -23,8 +23,8 @@ multilink bundle-name authenticated
 !
 ip tcp synwait-time 5
 !
-{make_interfaces(hostname, interfaces, border)}!
-{make_ospf(hostname, interfaces, border, ospf_pid, ospf_area, vpn)}!
+{make_interfaces(hostname, interfaces, vpn)}!
+{make_ospf(hostname, interfaces, ospf_pid, ospf_area, vpn)}!
 {"" if vpn is None else make_bgp(hostname, interfaces, border, asn, vpn)}!
 !
 ip forward-protocol nd
@@ -51,22 +51,32 @@ end
 """
 
 
-def make_interfaces(src, interfaces, border):
+physical_mapping = {}
+
+
+def make_interfaces(src, interfaces, vpn):
     config = ""
     i = 1
     for dst, int in interfaces[src].items():
         if src == dst:
             config += f"""interface Loopback0\n  ip address {int["addr"]} {int["subnet"].netmask}\n"""
         else:
-            config += f"""interface GigabitEthernet{i}/0\n ip address {int["addr"]} {int["subnet"].netmask}\n negotiation auto\n"""
+            if src not in physical_mapping:
+                physical_mapping[src] = {}
+            physical_mapping[src][dst] = i
+            config += f"""interface GigabitEthernet{i}/0\n"""
+            if vpn is not None and dst == vpn[src]["client"]:
+                # Rickin & Burst
+                config += f""" ip vrf forwarding VPN{vpn[src]["vpnid"]}\n"""
+            config += f""" ip address {int["addr"]} {int["subnet"].netmask}\n negotiation auto\n"""
             if int["mpls"]:
                 config += " mpls ip\n"
+            i += 1
         config += "!\n"
-        i += 1
     return config
 
 
-def make_ospf(src, interfaces, border, ospf_pid, ospf_area, vpn):
+def make_ospf(src, interfaces, ospf_pid, ospf_area, vpn):
     int = list(interfaces[src].values())[0]
     config = f"""router ospf {ospf_pid}\n router-id {int["addr"]}\n"""
     for dst, int in interfaces[src].items():
@@ -112,7 +122,7 @@ def make_bgp(src, interfaces, border, asn, vpn):
     # address-family vpn
     config += f""" address-family ipv4 vrf VPN{vpn[src]["vpnid"]}\n"""
     client = interfaces[vpn[src]["client"]][src]
-    config += f"""  neighbor {client["addr"]} remote as {vpn[src]["client_asn"]}\n"""
+    config += f"""  neighbor {client["addr"]} remote-as {vpn[src]["client_asn"]}\n"""
     config += f"""  neighbor {client["addr"]} activate\n"""
     config += """ exit-address-family\n"""
 

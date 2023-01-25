@@ -3,6 +3,7 @@ from ipaddress import ip_network
 import pygraphviz as gv
 import config_generator
 import pprint
+import json
 
 
 def main():
@@ -150,30 +151,19 @@ def main():
     pprint.pprint(vpn)
 
     for node in cluster_provider.nodes_iter():
-        if node in border:
-            # routeur de bordure
-            #print(f"Router '{node}' interfaces : {interfaces}")
-            config = config_generator.make_config(node,
-                                                  interfaces,
-                                                  border,
-                                                  cluster_provider.node_attr["ospf_pid"],
-                                                  cluster_provider.node_attr["ospf_area"],
-                                                  cluster_provider.node_attr["asn"],
-                                                  vpn)
-            with open(f"generated/router_{node}.cfg", "w") as file:
-                file.write(config)
-        else:
-            # routeur de coeur
-            #print(f"Router '{node}' interfaces : {interfaces}")
-            config = config_generator.make_config(node,
-                                                  interfaces,
-                                                  border,
-                                                  cluster_provider.node_attr["ospf_pid"],
-                                                  cluster_provider.node_attr["ospf_area"],
-                                                  cluster_provider.node_attr["asn"],
-                                                  None)
-            with open(f"generated/router_{node}.cfg", "w") as file:
-                file.write(config)
+        config = config_generator.make_config(node,
+                                              interfaces,
+                                              border,
+                                              cluster_provider.node_attr["ospf_pid"],
+                                              cluster_provider.node_attr["ospf_area"],
+                                              cluster_provider.node_attr["asn"],
+                                              vpn if node in border else None)
+        with open(f"generated/router_{node}.cfg", "w") as file:
+            file.write(config)
+
+    #pprint.pprint(config_generator.physical_mapping)
+    with open('generated/physical_mapping.json', 'w') as f:
+        json.dump(config_generator.physical_mapping, f, ensure_ascii=False)
 
     G.draw("rendered_cluster.svg", prog="dot")
     G.draw("rendered_neato.svg", prog="neato")
