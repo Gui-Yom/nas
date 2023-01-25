@@ -21,8 +21,10 @@ multilink bundle-name authenticated
 !
 ip tcp synwait-time 5
 !
-{make_interfaces(interfaces, mpls)}
+{"" if bgp is not None else ""}
+{make_interfaces(hostname, interfaces, mpls)}
 {make_ospf(interfaces, ospf_pid, ospf_area)}
+{make_bgp(interfaces, asn, bgp)}
 !
 ip forward-protocol nd
 !
@@ -48,15 +50,16 @@ end
 """
 
 
-def make_interfaces(interfaces, mpls):
+def make_interfaces(src, interfaces, mpls):
     config = ""
     i = 1
-    for _, (ip, subnet) in interfaces.items():
-        config += f"""interface GigabitEthernet{i}/0
- ip address {ip} {subnet.netmask}
- negotiation auto"""
-        if mpls:
-            config += "\n mpls ip"
+    for dst, (ip, subnet) in interfaces.items():
+        if src == dst:
+            config += f"""interface Loopback0\n  ip address {ip} {subnet.netmask}"""
+        else:
+            config += f"""interface GigabitEthernet{i}/0\n ip address {ip} {subnet.netmask}\n negotiation auto"""
+            if mpls:
+                config += "\n mpls ip"
         config += "\n!\n"
         i += 1
     return config
@@ -67,4 +70,11 @@ def make_ospf(interfaces, ospf_pid, ospf_area):
     config = f"router ospf {ospf_pid}\n router-id {ip}\n"
     for _, (ip, subnet) in interfaces.items():
         config += f" network {ip} {subnet.hostmask} area {ospf_area}\n"
+    return config
+
+
+def make_bgp(interfaces, asn, bgp):
+    (ip, subnet) = list(interfaces.values())[0]
+    config = f"router bgp {asn}\n bgp router-id {ip}\n bgp log-neighbor-changes"
+
     return config
