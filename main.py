@@ -29,7 +29,7 @@ def main():
     // Client 0
     subgraph cluster_client_0 {
         label="client0"
-        C0_1 -- C0_2 [color=red, virtual=true]
+        C0_1 -- C0_2 [color=red, vpn=1]
     }
     
     C0_1 [asn=111]
@@ -42,7 +42,7 @@ def main():
     // Client 1
     subgraph cluster_client_1 {
         label="client1"
-        C1_1 -- C1_2 [color=red, virtual=true]
+        C1_1 -- C1_2 [color=red, vpn=2]
     }
     
     C1_1 [asn=113]
@@ -81,8 +81,10 @@ def main():
         subnet = next(ip)
         #print(f"Allocating link in subnet '{subnet}'")
         subnet_hosts = subnet.hosts()
-        interfaces[a][b] = (next(subnet_hosts), subnet)
-        interfaces[b][a] = (next(subnet_hosts), subnet)
+        interfaces[a][b] = {"addr": next(
+            subnet_hosts), "subnet": subnet, "mpls": cluster_provider.node_attr["mpls"] == "true"}
+        interfaces[b][a] = {"addr": next(
+            subnet_hosts), "subnet": subnet, "mpls": cluster_provider.node_attr["mpls"] == "true"}
 
     # Allocation des ip loopback pour les routeurs de bordure
     private_subnet = ip_network("192.168.0.0/24")
@@ -90,11 +92,12 @@ def main():
     next(loopback_addresses)
     for node in border:
         subnet = next(loopback_addresses)
-        interfaces[node][node] = (list(subnet.hosts())[0], subnet)
+        interfaces[node][node] = {"addr": list(
+            subnet.hosts())[0], "subnet": subnet, "mpls": False}
 
     # Détection et allocation des interfaces provider-client
     # C'est aussi ici que l'on détecte les noeuds connectés en vpn
-    vpn = {}
+    vpn = {k: {} for k in border}
     for client in G.subgraphs_iter():
         if client != cluster_provider:
             for n in client.nodes_iter():
@@ -102,30 +105,44 @@ def main():
             for e in G.edges_iter(client):
                 a, b = e
                 a_in_client = a in client
+                # Both nodes are in the same client
                 if a_in_client and b in client:
-                    if e.attr.get("virtual") == "true":
+                    if e.attr.get("vpn") != "":
                         print(f"{a} and {b} will be linked via vpn")
-                        vpn[a] = {"virtual": b}
-                        vpn[b] = {"virtual": a}
+                        vpn[a].update(
+                            {"virtual": b, "vpnid": e.attr.get("vpn")})
+                        vpn[b].update(
+                            {"virtual": a, "vpnid": e.attr.get("vpn")})
                     else:
                         # TODO client topologies
                         pass
                 else:
-                    if e.attr.get("virtual") == "true":
+                    if e.attr.get("vpn") == "true":
                         print(
                             f"Virtual links are only for client clusters ({a} -- {b})")
                         return
                     else:
                         ip_range = ip_network(e.attr.get("ip_range"))
                         hosts = ip_range.hosts()
-                        interfaces[a][b] = (next(hosts), ip_range)
-                        interfaces[b][a] = (next(hosts), ip_range)
+                        interfaces[a][b] = {"addr": next(
+                            hosts), "subnet": ip_range, "mpls": False}
+                        interfaces[b][a] = {"addr": next(
+                            hosts), "subnet": ip_range, "mpls": False}
                         print(
                             f"Found link between client and provider : {a} -- {b}")
-                        vpn[b if a_in_client else a] = {
-                            "client": a if a_in_client else b}
+                        vpn[b if a_in_client else a].update(
+                            {"client": a if a_in_client else b})
                         vpn[a if a_in_client else b].update(
                             {"phys": b if a_in_client else a})
+
+    for n in border:
+        peer = vpn[vpn[vpn[n]["client"]]["virtual"]]["phys"]
+        vpn[n]["client_asn"] = vpn[n]["client"].attr["asn"]
+        vpn[n]["peer"] = peer
+        vpn[n]["vpnid"] = vpn[vpn[n]["client"]]["vpnid"]
+        for k in interfaces[n].keys():
+            if k != n and k != vpn[n]["client"]:
+                vpn[n]["core_addr"] = interfaces[n][k]["addr"]
 
     print("Allocated interfaces : ")
     pprint.pprint(interfaces)
@@ -137,20 +154,20 @@ def main():
             # routeur de bordure
             #print(f"Router '{node}' interfaces : {interfaces}")
             config = config_generator.make_config(node,
-                                                  interfaces[node],
-                                                  cluster_provider.node_attr["mpls"],
+                                                  interfaces,
+                                                  border,
                                                   cluster_provider.node_attr["ospf_pid"],
                                                   cluster_provider.node_attr["ospf_area"],
                                                   cluster_provider.node_attr["asn"],
-                                                  None)
+                                                  vpn)
             with open(f"generated/router_{node}.cfg", "w") as file:
                 file.write(config)
         else:
             # routeur de coeur
             #print(f"Router '{node}' interfaces : {interfaces}")
             config = config_generator.make_config(node,
-                                                  interfaces[node],
-                                                  cluster_provider.node_attr["mpls"],
+                                                  interfaces,
+                                                  border,
                                                   cluster_provider.node_attr["ospf_pid"],
                                                   cluster_provider.node_attr["ospf_area"],
                                                   cluster_provider.node_attr["asn"],
