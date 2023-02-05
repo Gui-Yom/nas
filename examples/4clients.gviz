@@ -1,0 +1,80 @@
+graph G {
+    subgraph cluster_provider {
+        label="provider"
+        ip_range="1.1.1.0/24"
+        node [asn=100, mpls=true, ospf_pid=1, ospf_area=0]
+        
+        R1 -- R2
+        R2 -- R3
+        R3 -- R1
+        R4 -- R3
+        R5 -- R4
+        R5 -- R2
+        R6 -- R4
+        R6 -- R5
+        R7 -- R6
+        R7 -- R3
+        R8 -- R7
+        R8 -- R6
+        R9 -- R2
+        R9 -- R5
+        R10 -- R5
+        R10 -- R6
+    }
+    
+    subgraph cluster_client0 {
+        label="client0"
+        ip_range="10.0.0.0/24"
+        
+        CE0_1 [asn=69420]
+        CE0_2 [asn=69421]
+        CE0_3 [asn=69422]
+        
+        CE0_1 -- CE0_2 [vpn=1, color=red]
+        CE0_3 -- CE0_2 [vpn=1, color=red]
+        CE0_3 -- CE0_1 [vpn=1, color=red]
+    }
+    
+    CE0_1 -- R1 [color=blue, ip_range="10.0.0.0/30"]
+    CE0_2 -- R8 [color=blue, ip_range="10.0.0.4/30"]
+    CE0_3 -- R2 [color=blue, ip_range="10.0.0.8/30"]
+    
+    subgraph cluster_client1 {
+        label="client1"
+        ip_range="10.0.1.0/24"
+        
+        CE1_1 [asn=8000]
+        CE1_2 [asn=8001]
+        
+        CE1_1 -- CE1_2 [vpn=2, color=red]
+    }
+    
+    CE1_1 -- R4 [color=blue, ip_range="10.0.0.0/30"]
+    CE1_2 -- R9 [color=blue, ip_range="10.0.0.4/30"]
+    
+    subgraph cluster_client2 {
+        label="client2"
+        ip_range="10.0.2.0/24"
+        
+        CE2_1 [asn=900]
+        CE2_2 [asn=901]
+        
+        CE2_1 -- CE2_2 [vpn=3, color=red]
+    }
+    
+    CE2_1 -- R5 [color=blue, ip_range="10.0.0.0/30"]
+    CE2_2 -- R7 [color=blue, ip_range="10.0.0.4/30"]
+    
+    subgraph cluster_client3 {
+        label="client3"
+        ip_range="10.0.3.0/24"
+        
+        CE3_1 [asn=1418]
+        CE3_2 [asn=3945]
+        
+        CE3_1 -- CE3_2 [vpn=4, color=red]
+    }
+    
+    CE3_1 -- R3 [color=blue, ip_range="10.0.0.0/30"]
+    CE3_2 -- R6 [color=blue, ip_range="10.0.0.4/30"]
+}

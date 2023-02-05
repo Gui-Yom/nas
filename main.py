@@ -4,55 +4,20 @@ import pygraphviz as gv
 import config_generator
 import pprint
 import json
+import argparse
+import os
 
 
 def main():
-    G = gv.AGraph("""graph G {
-    
-    // BGP en bordure avec les clients
-    // AS différentes
-    // OSPF + MPLS dans le provider
-    
-    subgraph cluster_provider {
-        label="provider"
-        ip_range="1.1.1.0/24"
-        node [asn=100, mpls=true, ospf_pid=1, ospf_area=0]
-        R1 -- R2
-        R2 -- R3
-        R3 -- R4
-        R4 -- R1
-        PE1 -- R1
-        PE2 -- R2
-        PE3 -- R3
-        PE4 -- R4
-    }
-    
-    // Client 0
-    subgraph cluster_client_0 {
-        label="client0"
-        C0_1 -- C0_2 [color=red, vpn=1]
-    }
-    
-    C0_1 [asn=111]
-    C0_2 [asn=112]
-    
-    // BGP
-    C0_1 -- PE1 [color=blue, ip_range="10.0.0.0/30"]
-    C0_2 -- PE4 [color=blue, ip_range="10.0.0.4/30"]
-    
-    // Client 1
-    subgraph cluster_client_1 {
-        label="client1"
-        C1_1 -- C1_2 [color=red, vpn=2]
-    }
-    
-    C1_1 [asn=113]
-    C1_2 [asn=114]
-    
-    // BGP
-    C1_1 -- PE2 [color=blue, ip_range="10.0.1.0/30"]
-    C1_2 -- PE3 [color=blue, ip_range="10.0.1.4/30"]
-}""")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config", type=argparse.FileType("r"), help="Config file to read")
+    parser.add_argument("--out", default="generated",
+                        nargs="?", required=False, help="Output folder")
+    parser.add_argument("--phy", type=argparse.FileType("r"),
+                        nargs="?", required=False, help="Physical mapping")
+    args = parser.parse_args()
+
+    G = gv.AGraph(args.config.read())
 
     # cluster_provider est l'équivalent du main dans un programme
     cluster_provider = G.get_subgraph("cluster_provider")
@@ -150,6 +115,8 @@ def main():
     print("VPN config :")
     pprint.pprint(vpn)
 
+    os.makedirs(args.out, exist_ok=True)
+
     for node in cluster_provider.nodes_iter():
         config = config_generator.make_config(node,
                                               interfaces,
@@ -158,11 +125,11 @@ def main():
                                               cluster_provider.node_attr["ospf_area"],
                                               cluster_provider.node_attr["asn"],
                                               vpn if node in border else None)
-        with open(f"generated/router_{node}.cfg", "w") as file:
+        with open(f"{args.out}/router_{node}.cfg", "w") as file:
             file.write(config)
 
-    #pprint.pprint(config_generator.physical_mapping)
-    with open('generated/physical_mapping.json', 'w') as f:
+    # pprint.pprint(config_generator.physical_mapping)
+    with open(f"{args.out}/physical_mapping.json", "w") as f:
         json.dump(config_generator.physical_mapping, f, ensure_ascii=False)
 
     G.draw("rendered_cluster.svg", prog="dot")

@@ -1,0 +1,46 @@
+graph G {
+    
+    // BGP en bordure avec les clients
+    // AS différentes
+    // OSPF + MPLS dans le provider
+    
+    subgraph cluster_provider {
+        label="provider"
+        ip_range="1.1.1.0/24"
+        node [asn=100, mpls=true, ospf_pid=1, ospf_area=0]
+        R1 -- R2
+        R2 -- R3
+        R3 -- R4
+        R4 -- R1
+        PE1 -- R1
+        PE2 -- R2
+        PE3 -- R3
+        PE4 -- R4
+    }
+    
+    // Client 0
+    subgraph cluster_client_0 {
+        label="client0"
+        C0_1 -- C0_2 [color=red, vpn=1]
+    }
+    
+    C0_1 [asn=111]
+    C0_2 [asn=112]
+    
+    // BGP
+    C0_1 -- PE1 [color=blue, ip_range="10.0.0.0/30"]
+    C0_2 -- PE4 [color=blue, ip_range="10.0.0.4/30"]
+    
+    // Client 1
+    subgraph cluster_client_1 {
+        label="client1"
+        C1_1 -- C1_2 [color=red, vpn=2]
+    }
+    
+    C1_1 [asn=113]
+    C1_2 [asn=114]
+    
+    // BGP
+    C1_1 -- PE2 [color=blue, ip_range="10.0.1.0/30"]
+    C1_2 -- PE3 [color=blue, ip_range="10.0.1.4/30"]
+}

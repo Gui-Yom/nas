@@ -1,0 +1,11 @@
+graph G {
+    subgraph cluster_provider {
+        label="provider"
+        ip_range="1.1.1.0/24"
+        node [asn=100, mpls=true, ospf_pid=1, ospf_area=0]
+        
+        R1 -- R2
+        R2 -- R3
+        R3 -- R1
+    }
+}
