@@ -24,7 +24,6 @@ graph G {
     
     subgraph cluster_client0 {
         label="client0"
-        ip_range="10.0.0.0/24"
         
         CE0_1 [asn=69420]
         CE0_2 [asn=69421]
@@ -41,7 +40,6 @@ graph G {
     
     subgraph cluster_client1 {
         label="client1"
-        ip_range="10.0.1.0/24"
         
         CE1_1 [asn=8000]
         CE1_2 [asn=8001]
@@ -54,7 +52,6 @@ graph G {
     
     subgraph cluster_client2 {
         label="client2"
-        ip_range="10.0.2.0/24"
         
         CE2_1 [asn=900]
         CE2_2 [asn=901]
@@ -67,7 +64,6 @@ graph G {
     
     subgraph cluster_client3 {
         label="client3"
-        ip_range="10.0.3.0/24"
         
         CE3_1 [asn=1418]
         CE3_2 [asn=3945]

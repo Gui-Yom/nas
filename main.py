@@ -2,7 +2,7 @@ from operator import xor
 from ipaddress import ip_network
 import pygraphviz as gv
 import config_generator
-import pprint
+from pprint import pprint
 import json
 import argparse
 import os
@@ -10,7 +10,8 @@ import os
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("config", type=argparse.FileType("r"), help="Config file to read")
+    parser.add_argument("config", type=argparse.FileType(
+        "r"), help="Config file to read")
     parser.add_argument("--out", default="generated",
                         nargs="?", required=False, help="Output folder")
     parser.add_argument("--phy", type=argparse.FileType("r"),
@@ -63,16 +64,15 @@ def main():
 
     # Détection et allocation des interfaces provider-client
     # C'est aussi ici que l'on détecte les noeuds connectés en vpn
-    vpn = {k: {} for k in border}
+    vpn = {k: [] for k in border}
     for client in G.subgraphs_iter():
         if client != cluster_provider:
             for n in client.nodes_iter():
                 vpn[n] = {}
             for e in G.edges_iter(client):
                 a, b = e
-                a_in_client = a in client
                 # Both nodes are in the same client
-                if a_in_client and b in client:
+                if a in client and b in client:
                     if e.attr.get("vpn") != "":
                         print(f"{a} and {b} will be linked via vpn")
                         vpn[a].update(
@@ -83,37 +83,37 @@ def main():
                         # TODO client topologies
                         pass
                 else:
-                    if e.attr.get("vpn") == "true":
-                        print(
-                            f"Virtual links are only for client clusters ({a} -- {b})")
-                        return
+                    ip_range = ip_network(e.attr.get("ip_range"))
+                    hosts = ip_range.hosts()
+                    interfaces[a][b] = {"addr": next(
+                        hosts), "subnet": ip_range, "mpls": False}
+                    interfaces[b][a] = {"addr": next(
+                        hosts), "subnet": ip_range, "mpls": False}
+                    print(
+                        f"Found link between client and provider : {a} -- {b}")
+                    if a in client:
+                        vpn[b].append({"client": a})
+                        vpn[a].update({"phys": b})
                     else:
-                        ip_range = ip_network(e.attr.get("ip_range"))
-                        hosts = ip_range.hosts()
-                        interfaces[a][b] = {"addr": next(
-                            hosts), "subnet": ip_range, "mpls": False}
-                        interfaces[b][a] = {"addr": next(
-                            hosts), "subnet": ip_range, "mpls": False}
-                        print(
-                            f"Found link between client and provider : {a} -- {b}")
-                        vpn[b if a_in_client else a].update(
-                            {"client": a if a_in_client else b})
-                        vpn[a if a_in_client else b].update(
-                            {"phys": b if a_in_client else a})
+                        vpn[a].append({"client": b})
+                        vpn[b].update({"phys": a})
+
+    pprint(vpn)
 
     for n in border:
-        peer = vpn[vpn[vpn[n]["client"]]["virtual"]]["phys"]
-        vpn[n]["client_asn"] = vpn[n]["client"].attr["asn"]
-        vpn[n]["peer"] = peer
-        vpn[n]["vpnid"] = vpn[vpn[n]["client"]]["vpnid"]
-        for k in interfaces[n].keys():
-            if k != n and k != vpn[n]["client"]:
-                vpn[n]["core_addr"] = interfaces[n][k]["addr"]
+        for client in vpn[n]:
+            peer = vpn[vpn[client["client"]]["virtual"]]["phys"]
+            client["client_asn"] = client["client"].attr["asn"]
+            client["peer"] = peer
+            client["vpnid"] = vpn[client["client"]]["vpnid"]
+            for k in interfaces[n].keys():
+                if k != n and k != client["client"]:
+                    client["core_addr"] = interfaces[n][k]["addr"]
 
     print("Allocated interfaces : ")
-    pprint.pprint(interfaces)
+    pprint(interfaces)
     print("VPN config :")
-    pprint.pprint(vpn)
+    pprint(vpn)
 
     os.makedirs(args.out, exist_ok=True)
 
