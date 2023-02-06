@@ -1,4 +1,4 @@
-def make_config(hostname, interfaces, border, ospf_pid, ospf_area, asn, vpn):
+def make_config(hostname, interfaces, physical_mapping, border, ospf_pid, ospf_area, asn, vpn):
     return f"""!
 version 15.2
 service timestamps debug datetime msec
@@ -23,7 +23,7 @@ multilink bundle-name authenticated
 !
 ip tcp synwait-time 5
 !
-{make_interfaces(hostname, interfaces, vpn)}!
+{make_interfaces(hostname, interfaces, physical_mapping, vpn)}!
 {make_ospf(hostname, interfaces, ospf_pid, ospf_area, vpn)}!
 {"" if vpn is None else make_bgp(hostname, interfaces, border, asn, vpn)}!
 !
@@ -51,20 +51,33 @@ end
 """
 
 
-physical_mapping = {}
-
-
-def make_interfaces(src, interfaces, vpn):
+def make_interfaces(src, interfaces, physical_mapping, vpn):
     config = ""
-    i = 1
+    available_ports = [i for i in range(1, 7)]
+    if src not in physical_mapping:
+        physical_mapping[src] = {}
+    else:
+        for dst, port in physical_mapping[src].items():
+            try:
+                available_ports.remove(port)
+            except ValueError as e:
+                print(
+                    f"Error : Mapped physical port isn't available, port {port} to {dst}")
+                exit(-1)
+
     for dst, int in interfaces[src].items():
         if src == dst:
             config += f"""interface Loopback0\n  ip address {int["addr"]} {int["subnet"].netmask}\n"""
         else:
-            if src not in physical_mapping:
-                physical_mapping[src] = {}
-            physical_mapping[src][dst] = i
-            config += f"""interface GigabitEthernet{i}/0\n"""
+            # Update physical mapping
+            if dst not in physical_mapping[src]:
+                try:
+                    physical_mapping[src][dst] = available_ports.pop(0)
+                except IndexError as e:
+                    print(f"Error : Not enough ports in router")
+                    exit(-1)
+
+            config += f"""interface GigabitEthernet{physical_mapping[src][dst]}/0\n"""
             vpnid = None
             if vpn is not None:
                 for vpni in vpn[src]:
@@ -76,7 +89,6 @@ def make_interfaces(src, interfaces, vpn):
             config += f""" ip address {int["addr"]} {int["subnet"].netmask}\n negotiation auto\n"""
             if int["mpls"]:
                 config += " mpls ip\n"
-            i += 1
         config += "!\n"
     return config
 

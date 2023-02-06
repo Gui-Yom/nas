@@ -18,6 +18,10 @@ def main():
                         nargs="?", required=False, help="Physical mapping")
     args = parser.parse_args()
 
+    physical_mapping = json.load(args.phy) if args.phy is not None else None
+
+    #pprint(config_generator.physical_mapping)
+
     G = gv.AGraph(args.config.read())
 
     # cluster_provider est l'équivalent du main dans un programme
@@ -55,12 +59,11 @@ def main():
 
     # Allocation des ip loopback pour les routeurs de bordure
     private_subnet = ip_network("192.168.0.0/24")
-    loopback_addresses = private_subnet.subnets(new_prefix=32)
-    next(loopback_addresses)
+    loopback_addresses = private_subnet.hosts()
     for node in border:
-        subnet = next(loopback_addresses)
-        interfaces[node][node] = {"addr": list(
-            subnet.hosts())[0], "subnet": subnet, "mpls": False}
+        #subnet = next(loopback_addresses)
+        interfaces[node][node] = {"addr": next(
+            loopback_addresses), "subnet": ip_network("192.168.0.0/32"), "mpls": False}
 
     # Détection et allocation des interfaces provider-client
     # C'est aussi ici que l'on détecte les noeuds connectés en vpn
@@ -98,7 +101,7 @@ def main():
                         vpn[a].append({"client": b})
                         vpn[b].update({"phys": a})
 
-    pprint(vpn)
+    #pprint(vpn)
 
     for n in border:
         for client in vpn[n]:
@@ -120,6 +123,7 @@ def main():
     for node in cluster_provider.nodes_iter():
         config = config_generator.make_config(node,
                                               interfaces,
+                                              physical_mapping,
                                               border,
                                               cluster_provider.node_attr["ospf_pid"],
                                               cluster_provider.node_attr["ospf_area"],
@@ -130,7 +134,7 @@ def main():
 
     # pprint.pprint(config_generator.physical_mapping)
     with open(f"{args.out}/physical_mapping.json", "w") as f:
-        json.dump(config_generator.physical_mapping, f, ensure_ascii=False)
+        json.dump(physical_mapping, f, ensure_ascii=False)
 
     G.draw("rendered_cluster.svg", prog="dot")
     G.draw("rendered_neato.svg", prog="neato")
