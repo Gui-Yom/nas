@@ -20,7 +20,7 @@ def main():
 
     physical_mapping = json.load(args.phy) if args.phy is not None else None
 
-    #pprint(config_generator.physical_mapping)
+    # pprint(config_generator.physical_mapping)
 
     G = gv.AGraph(args.config.read())
 
@@ -47,6 +47,7 @@ def main():
     print(f"Allocating ip addresses in range : '{ip_range}'")
     ip = ip_range.subnets(new_prefix=30)
 
+    # La table `interfaces` contient les ip/sous-réseaux de chaque interface de chaque routeur.
     interfaces = {k: {} for k in G.nodes_iter()}
     for a, b in cluster_provider.in_edges_iter():
         subnet = next(ip)
@@ -101,8 +102,10 @@ def main():
                         vpn[a].append({"client": b})
                         vpn[b].update({"phys": a})
 
-    #pprint(vpn)
+    # pprint(vpn)
 
+    # Parcours de la table vpn pour obtenir les informations nécessaires après que
+    # toutes les liaisons aient été établies.
     for n in border:
         for client in vpn[n]:
             peer = vpn[vpn[client["client"]]["virtual"]]["phys"]
